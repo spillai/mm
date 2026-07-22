@@ -173,7 +173,7 @@ mm/
 │   │   └── document/           # Document pipelines (fast.yaml, accurate.yaml)
 │   ├── mcp/                    # FastMCP server (mm-ctx[mcp])
 │   │   ├── __init__.py         # Lazy re-exports (mcp, serve)
-│   │   └── server.py           # cat / cat_many / peek / find / grep / sql tools
+│   │   └── server.py           # cat / cat_many / chat / peek / find / grep / sql
 │   ├── store/                  # SQLite + sqlite-vec storage (metadata + embeddings)
 │   │   ├── __init__.py         # Lazy re-exports
 │   │   ├── schema.py           # SQL DDL + column enums (3 tables)
@@ -261,7 +261,7 @@ uv run mm <command> [args]
 | `bench`   | Benchmark suite | `--format`, `--rounds` |
 | `config`  | Configuration & diagnostics | `show`, `init`, `set`, `reset-db`, `reset-profiles`, `reset`, `doctor` |
 | `profile` | Manage LLM provider profiles | `list`, `add`, `update`, `use`, `remove`, `clone`, `--format` |
-| `mcp`     | Serve mm's tools over MCP (requires `mm-ctx[mcp]`) | `serve`, `--port`, `--host`, `--transport` (http / stdio) |
+| `mcp`     | Serve mm's tools over MCP (requires `mm-ctx[mcp]`) — `cat`, `cat_many`, `chat` (via sampling), `peek`, `find`, `grep`, `sql` | `serve`, `--port`, `--host`, `--transport` (http / stdio) |
 
 ### Consolidated commands
 

@@ -17,8 +17,15 @@
   - The CLI delegates to the same core, so `mm cat` and `mm.cat()` cannot
     drift apart.
 - **MCP server — `mm mcp serve`** (`mm-ctx[mcp]`, FastMCP): exposes `cat`,
-  `cat_many`, `peek`, `find`, `grep`, `sql` over the Model Context Protocol
-  for any MCP client. HTTP or stdio transport.
+  `cat_many`, `chat`, `peek`, `find`, `grep`, `sql` over the Model Context
+  Protocol for any MCP client. HTTP or stdio transport.
+- **`chat` tool — extraction plus MCP sampling**: `chat(instruction, path,
+  **cat_kwargs)` runs `cat` and then asks the *client's* model to answer,
+  via `ctx.sample()`. mm supplies the multimodal extraction; the caller
+  supplies the reasoning, so the server needs no API key of its own. Takes
+  the full `cat` surface plus `system_prompt` / `max_tokens` /
+  `temperature`. Clients without a sampling handler get an actionable error
+  pointing at `cat` rather than a stack trace.
 - **`examples/pydantic-ai-harness/`**: five integration variants with
   pydantic-ai, from prompt pre-extraction (works with non-tool-calling
   models) through MCP + CodeMode batching, plus a `check_model.py` that

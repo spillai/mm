@@ -1,6 +1,6 @@
 # mm × pydantic-ai
 
-Five ways to give a pydantic-ai agent multimodal senses with `mm`, ordered
+Six ways to give a pydantic-ai agent multimodal senses with `mm`, ordered
 from "works with any model" to "needs a capable agentic model".
 
 The through-line: **LLMs can't read video, audio, or PDFs — mm turns them
@@ -46,6 +46,7 @@ requirement, which is exactly why they exist.
 | 3 | `03_direct_tools.py` | In-process agent tools | yes | no |
 | 4 | `04_mcp_server.py` | Same tools over MCP | yes | no |
 | 5 | `05_code_mode.py` | MCP tools batched inside one sandboxed program | yes | no |
+| 6 | `06_chat_sampling.py` | Extracts, then borrows *your* model to answer | no | no |
 
 ### 1. Context builder — mm as a processor
 
@@ -102,7 +103,7 @@ agent = Agent(model, capabilities=[MCP('http://127.0.0.1:8765/mcp', native=False
 ```
 
 The server ships with mm (`mm/mcp/server.py`) and exposes `cat`, `cat_many`,
-`peek`, `find`, `grep`, `sql`. One running server serves pydantic-ai, Claude
+`chat`, `peek`, `find`, `grep`, `sql`. One running server serves pydantic-ai, Claude
 Code, an IDE — anything that speaks MCP — and keeps heavy media work off the
 agent process.
 
@@ -121,6 +122,32 @@ agent = Agent(model, capabilities=[CodeMode(), MCP(MCP_URL, native=False)])
 
 This pairs unusually well with mm: extraction is slow and parallel, so
 batching it inside one program beats a chatty tool loop.
+
+### 6. Chat via sampling — the server borrows your model
+
+The variants above either call mm's own LLM or hand content back for your
+agent to reason over. MCP [sampling](https://gofastmcp.com/servers/sampling)
+inverts that: the server asks the *client* to run inference.
+
+The `chat` tool is `cat` plus one sampling round-trip — it extracts the file,
+then asks your model the question:
+
+```python
+chat(instruction="Summarize this document.", path="bill.pdf")
+```
+
+It accepts everything `cat` does (`mode`, `pipeline`, `encode`, `generate`,
+`n`, …) plus `system_prompt`, `max_tokens`, and `temperature`. mm needs no
+API key for this — the answer comes from whatever model the client already
+has. A client without a sampling handler gets an actionable error pointing
+it at `cat` instead.
+
+Measured against `mmbench-tiny`:
+
+```
+> Summarize this document in 3 bullet points.  (BillDownload-8pg.pdf)
+  [sampling] server asked the client to answer — 14,319 chars of context
+```
 
 ## Notes
 

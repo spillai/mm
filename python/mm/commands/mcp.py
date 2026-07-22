@@ -10,8 +10,8 @@ mcp_app = typer.Typer(
     name="mcp",
     help=(
         "Serve mm as an MCP server.\n\n"
-        "Exposes cat / cat_many / peek / find / grep / sql as MCP tools so any\n"
-        "MCP client — Claude Code, pydantic-ai, an IDE — can read images,\n"
+        "Exposes cat / cat_many / chat / peek / find / grep / sql as MCP tools so\n"
+        "any MCP client — Claude Code, pydantic-ai, an IDE — can read images,\n"
         "video, audio and PDFs through mm.\n\n"
         "Examples:\n\n"
         "  mm mcp serve                        # http://127.0.0.1:8765/mcp\n"

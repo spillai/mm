@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastmcp import FastMCP
+from fastmcp import Context, FastMCP
 from pydantic import Field
 
 INSTRUCTIONS = """\
@@ -37,13 +37,42 @@ read a file's content.
 (default) for a quick caption or page text, and mode="accurate" when you \
 need a careful description — accurate costs an LLM call and is slower, so \
 prefer fast unless the task demands detail. Results are cached by content \
-hash, so re-reading a file is free.\
+hash, so re-reading a file is free.
+
+`chat` answers a question about a file in one step: it extracts the file \
+with `cat` and reasons over the result for you. Reach for it instead of \
+`cat` when you want an answer rather than the raw content.\
 """
 
 mcp: FastMCP = FastMCP(name="mm", instructions=INSTRUCTIONS)
 
 Mode = Literal["fast", "accurate"]
 Transport = Literal["http", "stdio"]
+
+# Shared parameter annotations — `cat` and `chat` accept the same extraction
+# surface, so the descriptions the model sees stay identical between them.
+PathArg = Annotated[str, Field(description="Path to the file to read.")]
+ModeArg = Annotated[
+    Mode, Field(description="'fast' for a quick read, 'accurate' for a careful LLM read.")
+]
+PipelineArg = Annotated[
+    str | None,
+    Field(description="Named encoder (e.g. 'tile', 'mosaic') or path to a pipeline YAML."),
+]
+EncodeArg = Annotated[
+    dict[str, Any] | None,
+    Field(description="Encoder overrides, e.g. {'strategy': 'tile'}."),
+]
+GenerateArg = Annotated[
+    dict[str, Any] | None,
+    Field(description="LLM overrides, e.g. {'prompt': 'List every table.', 'max_tokens': 512}."),
+]
+LinesArg = Annotated[
+    int | None,
+    Field(description="Line limit: positive keeps the first N lines, negative the last N."),
+]
+NoCacheArg = Annotated[bool, Field(description="Force a fresh run, ignoring the cache.")]
+NoGenerateArg = Annotated[bool, Field(description="Run the encoder only; skip the LLM.")]
 
 _SCANNER_IN_THREAD = False
 """Run directory-scanning tools on the event loop rather than the thread pool.
@@ -65,30 +94,14 @@ they can block on model calls.
     tags={"multimodal", "extract"},
 )
 def cat(
-    path: Annotated[str, Field(description="Path to the file to read.")],
-    mode: Annotated[
-        Mode, Field(description="'fast' for a quick read, 'accurate' for a careful LLM read.")
-    ] = "fast",
-    pipeline: Annotated[
-        str | None,
-        Field(description="Named encoder (e.g. 'tile', 'mosaic') or path to a pipeline YAML."),
-    ] = None,
-    encode: Annotated[
-        dict[str, Any] | None,
-        Field(description="Encoder overrides, e.g. {'strategy': 'tile'}."),
-    ] = None,
-    generate: Annotated[
-        dict[str, Any] | None,
-        Field(
-            description="LLM overrides, e.g. {'prompt': 'List every table.', 'max_tokens': 512}."
-        ),
-    ] = None,
-    n: Annotated[
-        int | None,
-        Field(description="Line limit: positive keeps the first N lines, negative the last N."),
-    ] = None,
-    no_cache: Annotated[bool, Field(description="Force a fresh run, ignoring the cache.")] = False,
-    no_generate: Annotated[bool, Field(description="Run the encoder only; skip the LLM.")] = False,
+    path: PathArg,
+    mode: ModeArg = "fast",
+    pipeline: PipelineArg = None,
+    encode: EncodeArg = None,
+    generate: GenerateArg = None,
+    n: LinesArg = None,
+    no_cache: NoCacheArg = False,
+    no_generate: NoGenerateArg = False,
     dry_run: Annotated[
         bool, Field(description="Describe the pipeline that would run, without running it.")
     ] = False,
@@ -137,6 +150,82 @@ def cat_many(
         {"path": str(r.path), "kind": r.kind, "content": r.content, "cached": r.cached}
         for r in results
     ]
+
+
+@mcp.tool(annotations={"readOnlyHint": True}, tags={"multimodal", "chat"})
+async def chat(
+    instruction: Annotated[
+        str,
+        Field(description="What to do with the file, e.g. 'Summarize this document.'"),
+    ],
+    path: PathArg,
+    ctx: Context,
+    mode: ModeArg = "fast",
+    pipeline: PipelineArg = None,
+    encode: EncodeArg = None,
+    generate: GenerateArg = None,
+    n: LinesArg = None,
+    no_cache: NoCacheArg = False,
+    no_generate: NoGenerateArg = False,
+    system_prompt: Annotated[
+        str | None, Field(description="Optional system prompt for the answering model.")
+    ] = None,
+    max_tokens: Annotated[
+        int | None, Field(description="Maximum tokens in the answer.", ge=1)
+    ] = None,
+    temperature: Annotated[
+        float | None, Field(description="Sampling temperature for the answer.", ge=0.0)
+    ] = None,
+) -> str:
+    """Ask a question about any file and get an answer, in one step.
+
+    Extracts the file with `cat` — image, video, audio, PDF, Office doc,
+    or code — then reasons over the extracted content to answer
+    ``instruction``. Use this instead of `cat` when you want an answer
+    rather than the raw content.
+
+    The answer is produced by *your* model via MCP sampling, so no
+    server-side API key is involved.
+    """
+    from fastmcp.exceptions import ToolError
+
+    from mm.extract import cat as _cat
+
+    extraction = _cat(
+        path,
+        mode=mode,
+        pipeline=pipeline,
+        encode=encode,
+        generate=generate,
+        n=n,
+        no_cache=no_cache,
+        no_generate=no_generate,
+    )
+
+    prompt = (
+        f"{instruction}\n\n--- {extraction.path.name} ({extraction.kind}) ---\n{extraction.content}"
+    )
+
+    try:
+        result = await ctx.sample(
+            prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+    except Exception as e:
+        raise ToolError(
+            "chat needs a client that supports MCP sampling; "
+            f"this one rejected the request ({type(e).__name__}: {e}). "
+            "Use the `cat` tool and reason over its output instead."
+        ) from e
+
+    if not result.text:
+        raise ToolError(
+            f"The sampling client returned an empty answer for {extraction.path.name}. "
+            "The extraction itself succeeded — retry, or use `cat` to read it directly."
+        )
+    return result.text
 
 
 @mcp.tool(annotations={"readOnlyHint": True}, tags={"metadata"})
