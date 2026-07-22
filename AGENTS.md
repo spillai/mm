@@ -117,8 +117,9 @@ mm/
 ├── python/mm/              # Python package source
 │   ├── __init__.py             # Public API re-exports
 │   ├── _mm.pyi            # Type stubs for Rust bindings
-│   ├── cli.py                  # Typer app — registers 7 commands + config + profile
+│   ├── cli.py                  # Typer app — registers 7 commands + config + profile + mcp
 │   ├── context.py              # Context class (main Python API)
+│   ├── extract.py              # Public mm.cat() / mm.cat_many() — shared with the CLI
 │   ├── config.py               # LLM provider config (~/.mm/config.toml)
 │   ├── llm.py                  # LLM backend (OpenAI SDK, accurate mode)
 │   ├── df.py                   # arrow_to_polars / arrow_to_pandas
@@ -170,6 +171,9 @@ mm/
 │   │   ├── video/              # Video pipelines (fast.yaml, accurate.yaml)
 │   │   ├── audio/              # Audio pipelines (fast.yaml, accurate.yaml)
 │   │   └── document/           # Document pipelines (fast.yaml, accurate.yaml)
+│   ├── mcp/                    # FastMCP server (mm-ctx[mcp])
+│   │   ├── __init__.py         # Lazy re-exports (mcp, serve)
+│   │   └── server.py           # cat / cat_many / peek / find / grep / sql tools
 │   ├── store/                  # SQLite + sqlite-vec storage (metadata + embeddings)
 │   │   ├── __init__.py         # Lazy re-exports
 │   │   ├── schema.py           # SQL DDL + column enums (3 tables)
@@ -185,7 +189,8 @@ mm/
 │       ├── wc.py               # mm wc (--by-kind)
 │       ├── bench.py            # mm bench (benchmark suite)
 │       ├── config.py           # mm config (show, init, set, reset-db, reset-profiles, reset, doctor)
-│       └── profile.py          # mm profile (list, add, update, use, remove, clone)
+│       ├── profile.py          # mm profile (list, add, update, use, remove, clone)
+│       └── mcp.py              # mm mcp serve (FastMCP server)
 ├── tests/
 │   └── python/                 # pytest suite
 │       ├── conftest.py
@@ -234,7 +239,7 @@ mm <command> [args]
 uv run mm <command> [args]
 ```
 
-## CLI commands (9 total)
+## CLI commands (10 total)
 
 ### Top-level flags
 
@@ -256,6 +261,7 @@ uv run mm <command> [args]
 | `bench`   | Benchmark suite | `--format`, `--rounds` |
 | `config`  | Configuration & diagnostics | `show`, `init`, `set`, `reset-db`, `reset-profiles`, `reset`, `doctor` |
 | `profile` | Manage LLM provider profiles | `list`, `add`, `update`, `use`, `remove`, `clone`, `--format` |
+| `mcp`     | Serve mm's tools over MCP (requires `mm-ctx[mcp]`) | `serve`, `--port`, `--host`, `--transport` (http / stdio) |
 
 ### Consolidated commands
 
@@ -351,6 +357,23 @@ Columns (`files` in SQLite / `mm sql`): same but primary key is `uri` (absolute 
   `pipelines/{kind}/accurate.yaml` for the binary kinds.
 
 ## Python API
+
+`mm.cat()` is the programmatic face of `mm cat` — same pipelines, same
+extraction cache, every CLI flag available as a keyword. It is the single
+entry point the CLI, the MCP server, and any agent toolset all share.
+
+```python
+import mm
+
+mm.cat("slides.pdf")                       # page text, no LLM
+mm.cat("clip.mp4", mode="accurate")        # keyframe mosaic -> VLM
+mm.cat("photo.jpg", pipeline="tile")       # named encoder
+mm.cat("photo.jpg", generate={"prompt": "List every label."})
+mm.cat_many(paths, mode="fast")            # threaded batch
+
+result = mm.cat("paper.pdf")
+result.content, result.kind, result.cached  # str(result) is the content
+```
 
 See [docs/api.md](docs/api.md) for the incremental role-aware `mm.Context` + `mm.Ref` API (VLM prompt building). The snippet below covers the directory-scan mode.
 

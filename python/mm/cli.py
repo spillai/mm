@@ -28,6 +28,7 @@ else:
 from mm import __version__
 from mm.commands import bench, cat, find, grep, peek, sql, wc
 from mm.commands.config import config_app
+from mm.commands.mcp import mcp_app
 from mm.commands.profile import profile_app
 
 _ART = [
@@ -176,6 +177,7 @@ app.command(name="peek")(peek.peek_cmd)
 app.command(name="sql")(sql.sql_cmd)
 app.command(name="wc")(wc.wc_cmd)
 app.add_typer(config_app, name="config")
+app.add_typer(mcp_app, name="mcp")
 app.add_typer(profile_app, name="profile")
 
 

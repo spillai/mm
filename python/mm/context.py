@@ -217,7 +217,7 @@ class Context:
             # Legacy directory-scan mode.
             from mm._mm import Scanner
 
-            self.root = Path(root).resolve()
+            self.root = Path(root).expanduser().resolve()
             self._no_ignore = no_ignore
             self._session_id = session_id
             self._pyctx = None

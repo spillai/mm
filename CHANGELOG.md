@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+### Added
+- **Public extraction API — `mm.cat()` / `mm.cat_many()`**: the pipeline
+  dispatcher moved out of the Typer command (`commands/cat.py::_extract`)
+  into `mm/extract.py`, and is now importable. Every `mm cat` flag is a
+  keyword (`mode`, `pipeline`, `encode`, `generate`, `n`, `no_cache`,
+  `no_generate`, `dry_run`, `verbose`), so callers get the full pipeline
+  surface without reconstructing `CatOpts` by hand.
+  - Returns an `Extraction` (`path`, `kind`, `mode`, `content`, `cached`)
+    that stringifies to its content.
+  - `cat_many()` extracts concurrently via a thread pool, preserving order.
+  - `CatOpts` now fills unset fields from defaults and rejects unknown
+    names; previously any partial construction raised `AttributeError`.
+  - The CLI delegates to the same core, so `mm cat` and `mm.cat()` cannot
+    drift apart.
+- **MCP server — `mm mcp serve`** (`mm-ctx[mcp]`, FastMCP): exposes `cat`,
+  `cat_many`, `peek`, `find`, `grep`, `sql` over the Model Context Protocol
+  for any MCP client. HTTP or stdio transport.
+- **`examples/pydantic-ai-harness/`**: five integration variants with
+  pydantic-ai, from prompt pre-extraction (works with non-tool-calling
+  models) through MCP + CodeMode batching, plus a `check_model.py` that
+  probes whether the active profile's model supports vision and tool calls.
+
+### Fixed
+- **`Context("~/data")` silently scanned nothing**: `Path.resolve()` does not
+  expand `~`, so a tilde path produced `<cwd>/~/data` and zero files — despite
+  the class docstring using exactly that form. Now `expanduser()`d.
+  `FileMetadata.from_path()` had the same defect and raised `FileNotFoundError`.
+- **Segfault when scanning from pooled threads**: a `Context` scan (Rust
+  scanner → Arrow IPC) followed by `query_arrow_table` crashes the
+  interpreter when repeated across *freshly spawned* threads — the churn a
+  worker pool produces. A single long-lived thread is stable. The MCP
+  server's scanner-backed tools (`find`, `grep`, `sql`) therefore run on the
+  event loop rather than FastMCP's thread pool. The underlying
+  Rust/pyarrow-level cause is not yet fixed.
+
 ### Performance
 - **Disk-backed cache for `detect_scenes` + `transcript_messages` (260430)**:
   the slow steps in the accurate-mode video pipeline now persist across CLI

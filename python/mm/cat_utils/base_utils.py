@@ -3,7 +3,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, ClassVar, Iterator, Literal
 
 import typer
 
@@ -44,9 +44,37 @@ class CatOpts:
     dry_run: bool
     stream: bool
 
+    _DEFAULTS: ClassVar[dict[str, Any]] = {
+        "n": None,
+        "output_dir": None,
+        "mode": "fast",
+        "no_cache": False,
+        "no_generate": False,
+        "format": "text",
+        "encode_overrides": {},
+        "generate_overrides": {},
+        "pipelines": {},
+        "verbose": False,
+        "dry_run": False,
+        "stream": False,
+    }
+
     def __init__(self, **kwargs) -> None:
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+        """Build an options bag, filling any unset field with its default.
+
+        The CLI passes every field explicitly; library callers
+        (:mod:`mm.extract`) pass only what they care about.
+
+        Raises:
+            TypeError: If ``kwargs`` contains an unknown option name.
+        """
+        unknown = set(kwargs) - set(self.__slots__)
+        if unknown:
+            raise TypeError(f"Unknown CatOpts field(s): {', '.join(sorted(unknown))}")
+        for k, default in self._DEFAULTS.items():
+            setattr(
+                self, k, kwargs.get(k, default.copy() if isinstance(default, dict) else default)
+            )
 
     def __iter__(self) -> Iterator[str]:
         return iter(self.__slots__)

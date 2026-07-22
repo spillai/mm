@@ -9,8 +9,11 @@ from importlib.metadata import version
 
 __all__ = [
     "Context",
+    "Extraction",
     "Ref",
     "RefNotFoundError",
+    "cat",
+    "cat_many",
     "render_context",
     "render_messages",
     "uuid7",
@@ -19,8 +22,11 @@ __version__ = version("mm-ctx")
 
 _LAZY_IMPORTS = {
     "Context": ("mm.context", "Context"),
+    "Extraction": ("mm.extract", "Extraction"),
     "Ref": ("mm.refs", "Ref"),
     "RefNotFoundError": ("mm.refs", "RefNotFoundError"),
+    "cat": ("mm.extract", "cat"),
+    "cat_many": ("mm.extract", "cat_many"),
     "render_context": ("mm.notebook", "render_context"),
     "render_messages": ("mm.notebook", "render_messages"),
     "uuid7": ("mm.refs", "uuid7"),

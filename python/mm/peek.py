@@ -143,7 +143,7 @@ class FileMetadata:
         from mm._mm import Scanner
         from mm.constants import guess_mime
 
-        p = Path(path)
+        p = Path(path).expanduser()
         scanner = Scanner(str(p.parent))
         scanner.scan()
         r = scanner.extract_metadata(p.name)
